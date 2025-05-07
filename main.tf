@@ -118,6 +118,7 @@ resource "aws_security_group" "Prod-SG" {
   }
 
 resource "aws_instance" "production-ec2" {
+count = 2
   ami           = var.ami_id   
   instance_type = var.instance_type
   key_name      = var.key_name             
