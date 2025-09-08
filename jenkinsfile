@@ -1,0 +1,88 @@
+pipeline {
+    agent any
+
+    tools { 
+        terraform 'terraform'   // Name must match what you configured in Global Tool Config
+    }
+
+    environment {
+        TF_WORKSPACE = 'default'        // Change if using multiple workspaces
+        AWS_DEFAULT_REGION = 'us-east-1' // Update to your AWS region
+    }
+
+    stages {
+
+        stage('Git Checkout') {
+            steps {
+                git branch: 'main', url: 'https://github.com/DevByShrirang/terraform_module.git'
+            }
+        }
+
+        stage('Terraform Init') {
+            steps {
+                withAWS(credentials: 'aws-prod-creds', region: 'us-east-1') {
+                    sh 'terraform init -input=false'
+                }
+            }
+        }
+
+        stage('Terraform Validate') {
+            steps {
+                sh 'terraform validate'
+            }
+        }
+
+        stage('Terraform Plan') {
+            steps {
+                withAWS(credentials: 'aws-prod-creds', region: 'us-east-1') {
+                    sh 'terraform plan -out=tfplan -input=false'
+                }
+            }
+        }
+
+        stage('Manual Approval for Apply') {
+            steps {
+                script {
+                    timeout(time: 5, unit: 'MINUTES') {
+                        input message: 'Do you want to apply Terraform changes?'
+                    }
+                }
+            }
+        }
+
+        stage('Terraform Apply') {
+            steps {
+                withAWS(credentials: 'aws-prod-creds', region: 'us-east-1') {
+                    sh 'terraform apply -input=false tfplan'
+                }
+            }
+        }
+
+        stage('Manual Approval for Destroy (Optional)') {
+            steps {
+                script {
+                    timeout(time: 5, unit: 'MINUTES') {
+                        input message: 'Do you want to destroy the infrastructure?'
+                    }
+                }
+            }
+        }
+
+        stage('Terraform Destroy (Optional)') {
+            steps {
+                withAWS(credentials: 'aws-prod-creds', region: 'us-east-1') {
+                    sh 'terraform destroy -auto-approve'
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "Terraform pipeline executed successfully!"
+        }
+        failure {
+            echo "Terraform pipeline failed!"
+        }
+    }
+}
